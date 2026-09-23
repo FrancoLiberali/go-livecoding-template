@@ -17,6 +17,8 @@ import (
 	"interview/internal/httpsvc/service/mocks"
 )
 
+const validID = "123e4567-e89b-12d3-a456-426614174000"
+
 func newRouter(t *testing.T) (*mocks.MockService, http.Handler) {
 	t.Helper()
 
@@ -36,23 +38,38 @@ func do(router http.Handler, req *http.Request) *httptest.ResponseRecorder {
 
 func TestController_GetItem_OK(t *testing.T) {
 	svc, router := newRouter(t)
-	svc.EXPECT().Get(mock.Anything, "1").Return(domain.Item{ID: "1", Name: "widget"}, nil)
+	svc.EXPECT().Get(mock.Anything, validID).Return(domain.Item{ID: validID, Name: "widget"}, nil)
 
-	rec := do(router, httptest.NewRequest(http.MethodGet, "/items/1", nil))
+	rec := do(router, httptest.NewRequest(http.MethodGet, "/items/"+validID, nil))
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-	assert.JSONEq(t, `{"id":"1","name":"widget"}`, rec.Body.String())
+	assert.JSONEq(t, `{"id":"`+validID+`","name":"widget"}`, rec.Body.String())
 }
 
 func TestController_GetItem_NotFound(t *testing.T) {
 	svc, router := newRouter(t)
-	svc.EXPECT().Get(mock.Anything, "missing").Return(domain.Item{}, domain.ErrNotFound)
+	svc.EXPECT().Get(mock.Anything, validID).Return(domain.Item{}, domain.ErrNotFound)
 
-	rec := do(router, httptest.NewRequest(http.MethodGet, "/items/missing", nil))
+	rec := do(router, httptest.NewRequest(http.MethodGet, "/items/"+validID, nil))
 
 	require.Equal(t, http.StatusNotFound, rec.Code)
 	assert.JSONEq(t, `{"error":{"code":"not_found","message":"item not found"}}`, rec.Body.String())
+}
+
+func TestController_GetItem_InvalidID(t *testing.T) {
+	_, router := newRouter(t)
+
+	rec := do(router, httptest.NewRequest(http.MethodGet, "/items/not-a-uuid", nil))
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.JSONEq(t, `{
+		"error":{
+			"code":"validation_error",
+			"message":"request validation failed",
+			"details":[{"field":"id","message":"id must be a valid UUID"}]
+		}
+	}`, rec.Body.String())
 }
 
 func TestController_CreateItem_OK(t *testing.T) {
@@ -86,9 +103,9 @@ func TestController_CreateItem_MissingName(t *testing.T) {
 // it returns context.DeadlineExceeded, which the handler surfaces as 504.
 func TestController_GetItem_Timeout(t *testing.T) {
 	svc, router := newRouter(t)
-	svc.EXPECT().Get(mock.Anything, "slow").Return(domain.Item{}, context.DeadlineExceeded)
+	svc.EXPECT().Get(mock.Anything, validID).Return(domain.Item{}, context.DeadlineExceeded)
 
-	rec := do(router, httptest.NewRequest(http.MethodGet, "/items/slow", nil))
+	rec := do(router, httptest.NewRequest(http.MethodGet, "/items/"+validID, nil))
 
 	require.Equal(t, http.StatusGatewayTimeout, rec.Code)
 	assert.JSONEq(t, `{"error":{"code":"timeout","message":"request timed out"}}`, rec.Body.String())
@@ -98,9 +115,9 @@ func TestController_GetItem_Timeout(t *testing.T) {
 // context.Canceled, which the handler surfaces as 499 (Client Closed Request).
 func TestController_GetItem_ClientCanceled(t *testing.T) {
 	svc, router := newRouter(t)
-	svc.EXPECT().Get(mock.Anything, "gone").Return(domain.Item{}, context.Canceled)
+	svc.EXPECT().Get(mock.Anything, validID).Return(domain.Item{}, context.Canceled)
 
-	rec := do(router, httptest.NewRequest(http.MethodGet, "/items/gone", nil))
+	rec := do(router, httptest.NewRequest(http.MethodGet, "/items/"+validID, nil))
 
 	require.Equal(t, 499, rec.Code)
 	assert.JSONEq(t, `{"error":{"code":"canceled","message":"request canceled by client"}}`, rec.Body.String())

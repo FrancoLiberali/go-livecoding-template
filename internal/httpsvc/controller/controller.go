@@ -52,10 +52,22 @@ type createItemRequest struct {
 	Name string `json:"name" validate:"required,max=100"`
 }
 
-func (c *Controller) getItem(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+// getItemRequest carries the path param so it can go through the same validator
+// as body payloads. `required` is largely guaranteed by routing; the `uuid`
+// rule is the meaningful check (malformed id -> 400 instead of a 404).
+type getItemRequest struct {
+	ID string `json:"id" validate:"required,uuid"`
+}
 
-	item, err := c.svc.Get(r.Context(), id)
+func (c *Controller) getItem(w http.ResponseWriter, r *http.Request) {
+	req := getItemRequest{ID: chi.URLParam(r, "id")}
+	if err := c.validate.Struct(req); err != nil {
+		writeValidationError(w, err)
+
+		return
+	}
+
+	item, err := c.svc.Get(r.Context(), req.ID)
 	if err != nil {
 		// This endpoint owns how its domain errors map to responses.
 		switch {

@@ -125,6 +125,8 @@ func validationMessage(fieldErr validator.FieldError) string {
 		return fieldErr.Field() + " must be at least " + fieldErr.Param() + " characters"
 	case "max":
 		return fieldErr.Field() + " must be at most " + fieldErr.Param() + " characters"
+	case "uuid":
+		return fieldErr.Field() + " must be a valid UUID"
 	default:
 		return fieldErr.Field() + " is invalid"
 	}
