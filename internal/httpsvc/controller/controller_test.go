@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"interview/internal/httpsvc/controller"
+	"interview/internal/httpsvc/controller/mocks"
 	"interview/internal/httpsvc/domain"
-	"interview/internal/httpsvc/service/mocks"
 )
 
 const validID = "123e4567-e89b-12d3-a456-426614174000"

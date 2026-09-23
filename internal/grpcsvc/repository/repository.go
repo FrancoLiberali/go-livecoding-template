@@ -1,6 +1,7 @@
-// Package repository defines the storage interface for the gRPC service and
-// ships a simple in-memory implementation. Depend on the interface, not the
-// implementation, so it can be mocked (see ./mocks) and swapped for a real DB.
+// Package repository provides item storage implementations. The interface it
+// satisfies is declared by its consumer (the service package), following Go's
+// "define interfaces where they are used" idiom — so this package exports a
+// concrete type, not an interface.
 package repository
 
 import (
@@ -10,13 +11,7 @@ import (
 	"interview/internal/grpcsvc/domain"
 )
 
-// Repository is the persistence port for items. Mocked by mockery.
-type Repository interface {
-	GetByID(ctx context.Context, id string) (domain.Item, error)
-	Save(ctx context.Context, item domain.Item) error
-}
-
-// InMemory is a goroutine-safe in-memory Repository, handy for tests and demos.
+// InMemory is a goroutine-safe in-memory item store, handy for tests and demos.
 type InMemory struct {
 	mu    sync.RWMutex
 	items map[string]domain.Item

@@ -7,15 +7,16 @@ mockname: "Mock{{.InterfaceName}}"
 outpkg: mocks
 filename: "mock_{{.InterfaceName}}.go"
 packages:
-  interview/internal/httpsvc/repository:
-    interfaces:
-      Repository:
+  # Interfaces are declared by their consumer, so mocks live with the consumer.
   interview/internal/httpsvc/service:
     interfaces:
+      Repository:
+  interview/internal/httpsvc/controller:
+    interfaces:
       Service:
-  interview/internal/grpcsvc/repository:
+  interview/internal/grpcsvc/service:
     interfaces:
       Repository:
-  interview/internal/grpcsvc/service:
+  interview/internal/grpcsvc/controller:
     interfaces:
       Service:

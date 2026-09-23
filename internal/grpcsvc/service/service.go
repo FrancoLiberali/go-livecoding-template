@@ -1,5 +1,6 @@
-// Package service holds the gRPC service's business logic. It depends only on
-// the repository.Repository interface, so it is unit-tested with a mock repo.
+// Package service holds the gRPC service's business logic. It declares the
+// Repository interface it needs here (consumer-side), so it depends on no
+// concrete storage package — the interface is defined at the point of use.
 package service
 
 import (
@@ -8,31 +9,33 @@ import (
 	"github.com/google/uuid"
 
 	"interview/internal/grpcsvc/domain"
-	"interview/internal/grpcsvc/repository"
 )
 
-// Service is the business-logic port consumed by the controller. Mocked by mockery.
-type Service interface {
-	Get(ctx context.Context, id string) (domain.Item, error)
-	Create(ctx context.Context, name string) (domain.Item, error)
+// Repository is the storage behavior the service needs. The concrete
+// implementation lives elsewhere (e.g. the repository package); declaring the
+// interface here lets it be mocked for unit tests.
+type Repository interface {
+	GetByID(ctx context.Context, id string) (domain.Item, error)
+	Save(ctx context.Context, item domain.Item) error
 }
 
-type service struct {
-	repo repository.Repository
+// Service implements the item business logic over a Repository.
+type Service struct {
+	repo Repository
 }
 
 // New wires the service with its repository dependency.
-func New(repo repository.Repository) Service {
-	return &service{repo: repo}
+func New(repo Repository) *Service {
+	return &Service{repo: repo}
 }
 
 // Get returns the item with the given ID.
-func (s *service) Get(ctx context.Context, id string) (domain.Item, error) {
+func (s *Service) Get(ctx context.Context, id string) (domain.Item, error) {
 	return s.repo.GetByID(ctx, id)
 }
 
 // Create persists a new item with a generated ID and returns it.
-func (s *service) Create(ctx context.Context, name string) (domain.Item, error) {
+func (s *Service) Create(ctx context.Context, name string) (domain.Item, error) {
 	item := domain.Item{ID: uuid.NewString(), Name: name}
 	if err := s.repo.Save(ctx, item); err != nil {
 		return domain.Item{}, err

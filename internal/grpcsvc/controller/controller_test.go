@@ -11,9 +11,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"interview/internal/grpcsvc/controller"
+	"interview/internal/grpcsvc/controller/mocks"
 	"interview/internal/grpcsvc/domain"
 	"interview/internal/grpcsvc/pb"
-	"interview/internal/grpcsvc/service/mocks"
 )
 
 const validID = "123e4567-e89b-12d3-a456-426614174000"

@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"interview/internal/grpcsvc/domain"
-	"interview/internal/grpcsvc/repository/mocks"
 	"interview/internal/grpcsvc/service"
+	"interview/internal/grpcsvc/service/mocks"
 )
 
 func TestService_Get(t *testing.T) {

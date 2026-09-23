@@ -7,6 +7,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -17,8 +18,14 @@ import (
 	"github.com/go-playground/validator/v10"
 
 	"interview/internal/httpsvc/domain"
-	"interview/internal/httpsvc/service"
 )
+
+// Service is the business behavior the controller needs (consumer-side
+// interface). The concrete implementation lives in the service package.
+type Service interface {
+	Get(ctx context.Context, id string) (domain.Item, error)
+	Create(ctx context.Context, name string) (domain.Item, error)
+}
 
 // Per-endpoint request timeouts.
 const (
@@ -28,12 +35,12 @@ const (
 
 // Controller adapts HTTP requests to the item service.
 type Controller struct {
-	svc      service.Service
+	svc      Service
 	validate *validator.Validate
 }
 
 // New builds a controller over the given service.
-func New(svc service.Service) *Controller {
+func New(svc Service) *Controller {
 	return &Controller{svc: svc, validate: newValidator()}
 }
 

@@ -14,9 +14,9 @@ cmd/
 internal/
   httpsvc/           HTTP service (independent tree)
     domain/          entity + sentinel errors
-    repository/      Repository interface + in-memory impl   (+ mocks/)
-    service/         Service interface + business logic       (+ mocks/)
-    controller/      chi HTTP handlers (depend on Service)
+    repository/      concrete in-memory store (no interface here)
+    service/         business logic + the Repository interface it needs (+ mocks/)
+    controller/      chi handlers + the Service interface it needs      (+ mocks/)
   grpcsvc/           gRPC service (independent tree, same shape)
     domain/  repository/  service/  controller/  pb/ (generated)
 api/proto/           .proto definitions
@@ -24,9 +24,18 @@ api/proto/           .proto definitions
 .golangci.yml        full strict linter (from the cql project)
 ```
 
-Each layer depends on the **interface** of the layer below it:
-`controller → service.Service → repository.Repository`. Tests mock the
-dependency: service tests mock `Repository`, controller tests mock `Service`.
+**Interfaces are declared by their consumer, not their implementer** (Go's
+"accept interfaces, return structs" / define-interfaces-where-used idiom):
+
+- `controller` declares the `Service` interface it needs; `service` returns a
+  concrete `*Service` that satisfies it.
+- `service` declares the `Repository` interface it needs; `repository` returns a
+  concrete `*InMemory` that satisfies it.
+
+So the concrete packages depend on nothing above them, and only `cmd/` wires the
+chain (`repository → service → controller`). Mocks are generated into each
+**consumer** package's `mocks/`: service tests mock `Repository`, controller
+tests mock `Service`.
 
 ## Validation & structured errors
 
@@ -128,9 +137,9 @@ make tools         # install codegen/lint tooling
 
 ## Adding a new interface + mock
 
-1. Define the `interface` in its package.
-2. Add it under `packages:` in `.mockery.yaml`.
-3. `make mocks` → mock lands in that package's `mocks/` subdir.
+1. Declare the `interface` in the **consumer** package (the one that calls it).
+2. Add that package under `packages:` in `.mockery.yaml`.
+3. `make mocks` → mock lands in the consumer package's `mocks/` subdir.
 4. In tests: `m := mocks.NewMockXxx(t); m.EXPECT().Method(args).Return(...)`.
 
 ## Quick manual checks

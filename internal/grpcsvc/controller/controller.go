@@ -18,7 +18,6 @@ import (
 
 	"interview/internal/grpcsvc/domain"
 	"interview/internal/grpcsvc/pb"
-	"interview/internal/grpcsvc/service"
 )
 
 // Per-RPC timeouts.
@@ -27,16 +26,23 @@ const (
 	createItemTimeout = 3 * time.Second
 )
 
+// Service is the business behavior the controller needs (consumer-side
+// interface). The concrete implementation lives in the service package.
+type Service interface {
+	Get(ctx context.Context, id string) (domain.Item, error)
+	Create(ctx context.Context, name string) (domain.Item, error)
+}
+
 // Controller adapts gRPC requests to the item service.
 type Controller struct {
 	pb.UnimplementedItemServiceServer
 
-	svc      service.Service
+	svc      Service
 	validate *validator.Validate
 }
 
 // New builds a controller over the given service.
-func New(svc service.Service) *Controller {
+func New(svc Service) *Controller {
 	return &Controller{svc: svc, validate: newValidator()}
 }
 
