@@ -62,7 +62,7 @@ func (c *Controller) getItem(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, domain.ErrNotFound):
 			writeError(w, http.StatusNotFound, codeNotFound, "item not found")
 		default:
-			writeTransportError(w, err)
+			writeTransportError(r.Context(), w, err)
 		}
 
 		return
@@ -88,7 +88,7 @@ func (c *Controller) createItem(w http.ResponseWriter, r *http.Request) {
 	item, err := c.svc.Create(r.Context(), req.Name)
 	if err != nil {
 		// No domain errors are expected from Create; only transport-level ones.
-		writeTransportError(w, err)
+		writeTransportError(r.Context(), w, err)
 
 		return
 	}

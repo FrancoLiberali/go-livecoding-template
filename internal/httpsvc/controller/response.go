@@ -74,7 +74,9 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 // writeTransportError renders non-domain (transport/infrastructure) failures.
 // Domain errors are mapped per-endpoint by each handler; this covers the
 // context-driven cases (client cancellation, deadline) and the catch-all.
-func writeTransportError(w http.ResponseWriter, err error) {
+// Unexpected (internal) errors are logged in full before the sanitized 500 is
+// returned, so the real cause survives while the client sees a generic message.
+func writeTransportError(ctx context.Context, w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, context.Canceled):
 		// Client went away before we responded; the body is largely moot but we
@@ -83,6 +85,7 @@ func writeTransportError(w http.ResponseWriter, err error) {
 	case errors.Is(err, context.DeadlineExceeded):
 		writeError(w, http.StatusGatewayTimeout, codeTimeout, "request timed out")
 	default:
+		slog.ErrorContext(ctx, "internal error handling request", "err", err)
 		writeError(w, http.StatusInternalServerError, codeInternal, "internal error")
 	}
 }

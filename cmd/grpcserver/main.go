@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"interview/internal/grpcsvc/controller"
+	"interview/internal/grpcsvc/grpcmw"
 	"interview/internal/grpcsvc/pb"
 	"interview/internal/grpcsvc/repository"
 	"interview/internal/grpcsvc/service"
@@ -45,7 +46,7 @@ func run() error {
 		return err
 	}
 
-	server := grpc.NewServer()
+	server := grpc.NewServer(grpc.ChainUnaryInterceptor(grpcmw.UnaryLogger(slog.Default())))
 	pb.RegisterItemServiceServer(server, ctrl)
 	reflection.Register(server)
 

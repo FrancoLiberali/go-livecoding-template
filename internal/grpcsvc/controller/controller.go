@@ -9,6 +9,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -56,7 +57,7 @@ func (c *Controller) GetItem(ctx context.Context, req *pb.GetItemRequest) (*pb.G
 		case errors.Is(err, domain.ErrNotFound):
 			return nil, status.Error(codes.NotFound, "item not found")
 		default:
-			return nil, transportError(err)
+			return nil, transportError(ctx, err)
 		}
 	}
 
@@ -75,7 +76,7 @@ func (c *Controller) CreateItem(ctx context.Context, req *pb.CreateItemRequest) 
 	item, err := c.svc.Create(ctx, req.GetName())
 	if err != nil {
 		// No domain errors are expected from Create; only transport-level ones.
-		return nil, transportError(err)
+		return nil, transportError(ctx, err)
 	}
 
 	return &pb.CreateItemResponse{Item: toProto(item)}, nil
@@ -84,13 +85,17 @@ func (c *Controller) CreateItem(ctx context.Context, req *pb.CreateItemRequest) 
 // transportError maps non-domain (transport/infrastructure) failures. Domain
 // errors are mapped per-RPC by each handler; this covers the context-driven
 // cases (client cancellation, deadline) and the catch-all internal error.
-func transportError(err error) error {
+// Unexpected (internal) errors are logged in full before the sanitized status
+// is returned, so the real cause survives while the client sees a generic one.
+func transportError(ctx context.Context, err error) error {
 	switch {
 	case errors.Is(err, context.Canceled):
 		return status.Error(codes.Canceled, "request canceled by client")
 	case errors.Is(err, context.DeadlineExceeded):
 		return status.Error(codes.DeadlineExceeded, "request timed out")
 	default:
+		slog.ErrorContext(ctx, "internal error handling request", "err", err)
+
 		return status.Error(codes.Internal, "internal error")
 	}
 }

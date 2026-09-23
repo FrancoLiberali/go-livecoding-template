@@ -62,6 +62,23 @@ different status in a different endpoint). Only non-domain failures are shared:
 `writeTransportError` / `transportError` handle the timeout (the sole exception)
 and the catch-all internal error.
 
+## Logging
+
+Structured `slog` throughout. Every request/response is logged once:
+
+- **HTTP** — `httpmw.RequestLogger` (a chi middleware) logs `method`, `path`,
+  `status`, `bytes`, `duration`, `remote`, `request_id`.
+- **gRPC** — `grpcmw.UnaryLogger` (a unary interceptor) logs `method`, `code`,
+  `duration`.
+
+> chi ships `middleware.Logger`, but it writes unstructured stdlib-`log` output;
+> these thin wrappers keep request logs in the same structured `slog` stream as
+> the rest of the app (reusing chi's `WrapResponseWriter`/`GetReqID`).
+
+Unexpected **internal** errors are logged in full (`slog.ErrorContext`) at the
+mapping boundary *before* the sanitized `500` / `Internal` is returned — the
+client sees a generic message while the real cause survives in the logs.
+
 ## Per-endpoint timeouts
 
 Each endpoint/RPC has its own hardcoded timeout (`getItemTimeout` /
