@@ -16,11 +16,13 @@ import (
 	"interview/internal/grpcsvc/service/mocks"
 )
 
+const validID = "123e4567-e89b-12d3-a456-426614174000"
+
 func TestController_GetItem_OK(t *testing.T) {
 	svc := mocks.NewMockService(t)
-	svc.EXPECT().Get(mock.Anything, "1").Return(domain.Item{ID: "1", Name: "widget"}, nil)
+	svc.EXPECT().Get(mock.Anything, validID).Return(domain.Item{ID: validID, Name: "widget"}, nil)
 
-	resp, err := controller.New(svc).GetItem(context.Background(), &pb.GetItemRequest{Id: "1"})
+	resp, err := controller.New(svc).GetItem(context.Background(), &pb.GetItemRequest{Id: validID})
 
 	require.NoError(t, err)
 	assert.Equal(t, "widget", resp.GetItem().GetName())
@@ -28,12 +30,22 @@ func TestController_GetItem_OK(t *testing.T) {
 
 func TestController_GetItem_NotFound(t *testing.T) {
 	svc := mocks.NewMockService(t)
-	svc.EXPECT().Get(mock.Anything, "missing").Return(domain.Item{}, domain.ErrNotFound)
+	svc.EXPECT().Get(mock.Anything, validID).Return(domain.Item{}, domain.ErrNotFound)
 
-	_, err := controller.New(svc).GetItem(context.Background(), &pb.GetItemRequest{Id: "missing"})
+	_, err := controller.New(svc).GetItem(context.Background(), &pb.GetItemRequest{Id: validID})
 
 	require.Error(t, err)
 	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+func TestController_GetItem_InvalidID(t *testing.T) {
+	svc := mocks.NewMockService(t)
+
+	_, err := controller.New(svc).GetItem(context.Background(), &pb.GetItemRequest{Id: "not-a-uuid"})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Equal(t, "id must be a valid UUID", status.Convert(err).Message())
 }
 
 func TestController_CreateItem_OK(t *testing.T) {
@@ -60,9 +72,9 @@ func TestController_CreateItem_MissingName(t *testing.T) {
 // context.DeadlineExceeded, which the RPC surfaces as codes.DeadlineExceeded.
 func TestController_GetItem_Timeout(t *testing.T) {
 	svc := mocks.NewMockService(t)
-	svc.EXPECT().Get(mock.Anything, "slow").Return(domain.Item{}, context.DeadlineExceeded)
+	svc.EXPECT().Get(mock.Anything, validID).Return(domain.Item{}, context.DeadlineExceeded)
 
-	_, err := controller.New(svc).GetItem(context.Background(), &pb.GetItemRequest{Id: "slow"})
+	_, err := controller.New(svc).GetItem(context.Background(), &pb.GetItemRequest{Id: validID})
 
 	require.Error(t, err)
 	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
@@ -72,9 +84,9 @@ func TestController_GetItem_Timeout(t *testing.T) {
 // surfaces as codes.Canceled.
 func TestController_GetItem_ClientCanceled(t *testing.T) {
 	svc := mocks.NewMockService(t)
-	svc.EXPECT().Get(mock.Anything, "gone").Return(domain.Item{}, context.Canceled)
+	svc.EXPECT().Get(mock.Anything, validID).Return(domain.Item{}, context.Canceled)
 
-	_, err := controller.New(svc).GetItem(context.Background(), &pb.GetItemRequest{Id: "gone"})
+	_, err := controller.New(svc).GetItem(context.Background(), &pb.GetItemRequest{Id: validID})
 
 	require.Error(t, err)
 	assert.Equal(t, codes.Canceled, status.Code(err))

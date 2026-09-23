@@ -38,6 +38,8 @@ func validationMessage(err error) string {
 			msgs = append(msgs, fieldErr.Field()+" is required")
 		case "max":
 			msgs = append(msgs, fieldErr.Field()+" must be at most "+fieldErr.Param()+" characters")
+		case "uuid":
+			msgs = append(msgs, fieldErr.Field()+" must be a valid UUID")
 		default:
 			msgs = append(msgs, fieldErr.Field()+" is invalid")
 		}

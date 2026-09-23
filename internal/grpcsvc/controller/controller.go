@@ -45,8 +45,17 @@ type createItemInput struct {
 	Name string `json:"name" validate:"required,max=100"`
 }
 
+// getItemInput carries validation tags for the GetItem request fields.
+type getItemInput struct {
+	ID string `json:"id" validate:"required,uuid"`
+}
+
 // GetItem returns an item by ID.
 func (c *Controller) GetItem(ctx context.Context, req *pb.GetItemRequest) (*pb.GetItemResponse, error) {
+	if err := c.validate.Struct(getItemInput{ID: req.GetId()}); err != nil {
+		return nil, status.Error(codes.InvalidArgument, validationMessage(err))
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, getItemTimeout)
 	defer cancel()
 
