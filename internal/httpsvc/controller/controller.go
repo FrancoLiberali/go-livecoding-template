@@ -1,27 +1,58 @@
 // Package controller is the HTTP transport layer. It depends on the
 // service.Service interface, so handlers are unit-tested with a mock service.
+// Every response — success or error — is JSON. Request bodies are validated
+// with go-playground/validator, and each endpoint runs under its own timeout
+// that yields a 504 when exceeded.
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
 
 	"interview/internal/httpsvc/domain"
 	"interview/internal/httpsvc/service"
 )
 
-// Controller adapts HTTP requests to the item service.
-type Controller struct {
-	svc service.Service
+const (
+	defaultGetItemTimeout    = 2 * time.Second
+	defaultCreateItemTimeout = 3 * time.Second
+)
+
+// Timeouts holds the per-endpoint request timeouts.
+type Timeouts struct {
+	GetItem    time.Duration
+	CreateItem time.Duration
 }
 
-// New builds a controller over the given service.
+// DefaultTimeouts returns sensible per-endpoint defaults.
+func DefaultTimeouts() Timeouts {
+	return Timeouts{
+		GetItem:    defaultGetItemTimeout,
+		CreateItem: defaultCreateItemTimeout,
+	}
+}
+
+// Controller adapts HTTP requests to the item service.
+type Controller struct {
+	svc      service.Service
+	validate *validator.Validate
+	timeouts Timeouts
+}
+
+// New builds a controller with the default per-endpoint timeouts.
 func New(svc service.Service) *Controller {
-	return &Controller{svc: svc}
+	return NewWithTimeouts(svc, DefaultTimeouts())
+}
+
+// NewWithTimeouts builds a controller with explicit timeouts (used in tests).
+func NewWithTimeouts(svc service.Service, timeouts Timeouts) *Controller {
+	return &Controller{svc: svc, validate: newValidator(), timeouts: timeouts}
 }
 
 // RegisterRoutes mounts the controller's routes on the given router.
@@ -36,21 +67,18 @@ type itemResponse struct {
 }
 
 type createItemRequest struct {
-	Name string `json:"name"`
+	Name string `json:"name" validate:"required,max=100"`
 }
 
 func (c *Controller) getItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	item, err := c.svc.Get(r.Context(), id)
+	item, err := runWithTimeout(r.Context(), c.timeouts.GetItem,
+		func(ctx context.Context) (domain.Item, error) {
+			return c.svc.Get(ctx, id)
+		})
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "item not found")
-
-			return
-		}
-
-		writeError(w, http.StatusInternalServerError, "internal error")
+		c.writeServiceError(w, err)
 
 		return
 	}
@@ -61,20 +89,23 @@ func (c *Controller) getItem(w http.ResponseWriter, r *http.Request) {
 func (c *Controller) createItem(w http.ResponseWriter, r *http.Request) {
 	var req createItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid body")
+		writeError(w, http.StatusBadRequest, codeInvalidRequest, "malformed JSON body")
 
 		return
 	}
 
-	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
+	if err := c.validate.Struct(req); err != nil {
+		writeValidationError(w, err)
 
 		return
 	}
 
-	item, err := c.svc.Create(r.Context(), req.Name)
+	item, err := runWithTimeout(r.Context(), c.timeouts.CreateItem,
+		func(ctx context.Context) (domain.Item, error) {
+			return c.svc.Create(ctx, req.Name)
+		})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		c.writeServiceError(w, err)
 
 		return
 	}
@@ -82,19 +113,53 @@ func (c *Controller) createItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toResponse(item))
 }
 
+// writeServiceError maps a service-layer error to the right status + JSON envelope.
+func (c *Controller) writeServiceError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		writeError(w, http.StatusGatewayTimeout, codeTimeout, "request timed out")
+	case errors.Is(err, domain.ErrNotFound):
+		writeError(w, http.StatusNotFound, codeNotFound, "item not found")
+	default:
+		writeError(w, http.StatusInternalServerError, codeInternal, "internal error")
+	}
+}
+
 func toResponse(item domain.Item) itemResponse {
 	return itemResponse{ID: item.ID, Name: item.Name}
 }
 
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+// runWithTimeout runs op under a deadline. If the deadline elapses before op
+// returns, it returns context.DeadlineExceeded regardless of whether op honors
+// the context — guaranteeing the caller can surface a 504. op still receives
+// the deadline-bound context so well-behaved downstreams cancel promptly.
+func runWithTimeout[T any](
+	parent context.Context,
+	timeout time.Duration,
+	op func(context.Context) (T, error),
+) (T, error) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
 
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		slog.Error("encode response", "err", err)
+	type result struct {
+		val T
+		err error
 	}
-}
 
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
+	// Buffered so the goroutine never blocks if we've already timed out.
+	done := make(chan result, 1)
+
+	go func() {
+		val, err := op(ctx)
+		done <- result{val: val, err: err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		var zero T
+
+		return zero, ctx.Err()
+	case res := <-done:
+		return res.val, res.err
+	}
 }

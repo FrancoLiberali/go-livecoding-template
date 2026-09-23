@@ -28,6 +28,41 @@ Each layer depends on the **interface** of the layer below it:
 `controller → service.Service → repository.Repository`. Tests mock the
 dependency: service tests mock `Repository`, controller tests mock `Service`.
 
+## Validation & structured errors
+
+Request bodies are validated with
+[go-playground/validator](https://github.com/go-playground/validator) via struct
+tags (e.g. `validate:"required,max=100"`). Field names in messages come from the
+`json` tag, so they match the payload.
+
+**Every HTTP response is JSON.** All error responses share one envelope:
+
+```json
+{ "error": { "code": "validation_error",
+             "message": "request validation failed",
+             "details": [ { "field": "name", "message": "name is required" } ] } }
+```
+
+| Situation            | Status | `code`             |
+|----------------------|--------|--------------------|
+| malformed JSON body  | 400    | `invalid_request`  |
+| failed validation    | 400    | `validation_error` (with `details`) |
+| item not found       | 404    | `not_found`        |
+| endpoint timed out   | 504    | `timeout`          |
+| unexpected failure   | 500    | `internal`         |
+
+The gRPC service uses the same validator and maps to status codes:
+`InvalidArgument` (validation), `NotFound`, `DeadlineExceeded` (timeout),
+`Internal`.
+
+## Per-endpoint timeouts
+
+Each endpoint/RPC runs under its own timeout (`controller.Timeouts`, defaults in
+`DefaultTimeouts()`). The call runs via `runWithTimeout`, which `select`s on the
+deadline vs. the result — so a slow request yields **504** (HTTP) /
+**DeadlineExceeded** (gRPC) even if a downstream ignores the context. Use
+`controller.NewWithTimeouts(svc, ...)` to inject short timeouts in tests.
+
 ## Commands
 
 ```
