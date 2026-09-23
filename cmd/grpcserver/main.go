@@ -10,6 +10,8 @@ import (
 	"os/signal"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
 	"interview/internal/grpcsvc/controller"
@@ -46,8 +48,21 @@ func run() error {
 		return err
 	}
 
-	server := grpc.NewServer(grpc.ChainUnaryInterceptor(grpcmw.UnaryLogger(slog.Default())))
+	// Logger is outermost so it records every RPC; recovery is closest to the
+	// handler so a handler panic is turned into an Internal error the logger
+	// still sees (rather than crashing the server).
+	server := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		grpcmw.UnaryLogger(slog.Default()),
+		grpcmw.UnaryRecovery(slog.Default()),
+	))
 	pb.RegisterItemServiceServer(server, ctrl)
+
+	// Standard gRPC health service (grpc.health.v1.Health) for probes.
+	healthServer := health.NewServer()
+	healthpb.RegisterHealthServer(server, healthServer)
+	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus(pb.ItemService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
+
 	reflection.Register(server)
 
 	go func() {

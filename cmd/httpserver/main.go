@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"interview/internal/httpsvc/controller"
+	"interview/internal/httpsvc/health"
 	"interview/internal/httpsvc/httpmw"
 	"interview/internal/httpsvc/repository"
 	"interview/internal/httpsvc/service"
@@ -36,6 +37,8 @@ func main() {
 
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, httpmw.RequestLogger(logger), middleware.Recoverer)
+	router.Get("/healthz", health.Live)
+	router.Get("/readyz", health.Ready)
 	ctrl.RegisterRoutes(router)
 
 	server := &http.Server{

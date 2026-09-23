@@ -62,6 +62,18 @@ different status in a different endpoint). Only non-domain failures are shared:
 `writeTransportError` / `transportError` handle the timeout (the sole exception)
 and the catch-all internal error.
 
+## Resilience & ops
+
+- **gRPC panic recovery** — `grpcmw.UnaryRecovery` recovers handler panics into
+  `codes.Internal` (logged with a stack) so a panic can't crash the server
+  (grpc-go doesn't recover by default). HTTP is covered by chi's `Recoverer`.
+- **Health / readiness** — HTTP `GET /healthz` and `GET /readyz` return
+  `{"status":"ok"}`; gRPC exposes the standard `grpc.health.v1.Health` service.
+  ```
+  curl -s localhost:8080/healthz
+  grpcurl -plaintext -d '{"service":"grpcsvc.v1.ItemService"}' localhost:9090 grpc.health.v1.Health/Check
+  ```
+
 ## Logging
 
 Structured `slog` throughout. Every request/response is logged once:
