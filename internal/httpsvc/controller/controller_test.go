@@ -1,6 +1,7 @@
 package controller_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -79,6 +80,18 @@ func TestController_CreateItem_MissingName(t *testing.T) {
 			"details":[{"field":"name","message":"name is required"}]
 		}
 	}`, rec.Body.String())
+}
+
+// When the deadline set by the timeout middleware is honored by the service,
+// it returns context.DeadlineExceeded, which the handler surfaces as 504.
+func TestController_GetItem_Timeout(t *testing.T) {
+	svc, router := newRouter(t)
+	svc.EXPECT().Get(mock.Anything, "slow").Return(domain.Item{}, context.DeadlineExceeded)
+
+	rec := do(router, httptest.NewRequest(http.MethodGet, "/items/slow", nil))
+
+	require.Equal(t, http.StatusGatewayTimeout, rec.Code)
+	assert.JSONEq(t, `{"error":{"code":"timeout","message":"request timed out"}}`, rec.Body.String())
 }
 
 func TestController_CreateItem_MalformedJSON(t *testing.T) {

@@ -1,18 +1,19 @@
 // Package controller is the HTTP transport layer. It depends on the
 // service.Service interface, so handlers are unit-tested with a mock service.
 // Every response — success or error — is JSON. Request bodies are validated
-// with go-playground/validator, and each endpoint runs under its own timeout
-// that yields a 504 when exceeded.
+// with go-playground/validator. Each endpoint gets a deadline from a per-route
+// chi timeout middleware; when the service honors that deadline and returns
+// context.DeadlineExceeded, the handler surfaces a 504.
 package controller
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-playground/validator/v10"
 
 	"interview/internal/httpsvc/domain"
@@ -36,10 +37,10 @@ func New(svc service.Service) *Controller {
 	return &Controller{svc: svc, validate: newValidator()}
 }
 
-// RegisterRoutes mounts the controller's routes on the given router.
+// RegisterRoutes mounts the routes, each with its own deadline middleware.
 func (c *Controller) RegisterRoutes(r chi.Router) {
-	r.Get("/items/{id}", c.getItem)
-	r.Post("/items", c.createItem)
+	r.With(middleware.Timeout(getItemTimeout)).Get("/items/{id}", c.getItem)
+	r.With(middleware.Timeout(createItemTimeout)).Post("/items", c.createItem)
 }
 
 type itemResponse struct {
@@ -54,10 +55,7 @@ type createItemRequest struct {
 func (c *Controller) getItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	item, err := runWithTimeout(r.Context(), getItemTimeout,
-		func(ctx context.Context) (domain.Item, error) {
-			return c.svc.Get(ctx, id)
-		})
+	item, err := c.svc.Get(r.Context(), id)
 	if err != nil {
 		// This endpoint owns how its domain errors map to responses.
 		switch {
@@ -87,10 +85,7 @@ func (c *Controller) createItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := runWithTimeout(r.Context(), createItemTimeout,
-		func(ctx context.Context) (domain.Item, error) {
-			return c.svc.Create(ctx, req.Name)
-		})
+	item, err := c.svc.Create(r.Context(), req.Name)
 	if err != nil {
 		// No domain errors are expected from Create; only transport-level ones.
 		writeTransportError(w, err)
@@ -103,39 +98,4 @@ func (c *Controller) createItem(w http.ResponseWriter, r *http.Request) {
 
 func toResponse(item domain.Item) itemResponse {
 	return itemResponse{ID: item.ID, Name: item.Name}
-}
-
-// runWithTimeout runs op under a deadline. If the deadline elapses before op
-// returns, it returns context.DeadlineExceeded regardless of whether op honors
-// the context — guaranteeing the caller can surface a 504. op still receives
-// the deadline-bound context so well-behaved downstreams cancel promptly.
-func runWithTimeout[T any](
-	parent context.Context,
-	timeout time.Duration,
-	op func(context.Context) (T, error),
-) (T, error) {
-	ctx, cancel := context.WithTimeout(parent, timeout)
-	defer cancel()
-
-	type result struct {
-		val T
-		err error
-	}
-
-	// Buffered so the goroutine never blocks if we've already timed out.
-	done := make(chan result, 1)
-
-	go func() {
-		val, err := op(ctx)
-		done <- result{val: val, err: err}
-	}()
-
-	select {
-	case <-ctx.Done():
-		var zero T
-
-		return zero, ctx.Err()
-	case res := <-done:
-		return res.val, res.err
-	}
 }

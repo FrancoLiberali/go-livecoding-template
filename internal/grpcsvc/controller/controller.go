@@ -1,8 +1,9 @@
 // Package controller is the gRPC transport layer. It implements the generated
 // ItemServiceServer and depends on the service.Service interface, so its RPCs
 // are unit-tested with a mock service. Requests are validated with
-// go-playground/validator, and each RPC runs under its own timeout that yields
-// codes.DeadlineExceeded (the gRPC analog of HTTP 504) when exceeded.
+// go-playground/validator. Each RPC derives a deadline with context.WithTimeout
+// (the gRPC analog of the HTTP timeout middleware); when the service honors it
+// and returns context.DeadlineExceeded, the RPC surfaces codes.DeadlineExceeded.
 package controller
 
 import (
@@ -45,10 +46,10 @@ type createItemInput struct {
 
 // GetItem returns an item by ID.
 func (c *Controller) GetItem(ctx context.Context, req *pb.GetItemRequest) (*pb.GetItemResponse, error) {
-	item, err := runWithTimeout(ctx, getItemTimeout,
-		func(ctx context.Context) (domain.Item, error) {
-			return c.svc.Get(ctx, req.GetId())
-		})
+	ctx, cancel := context.WithTimeout(ctx, getItemTimeout)
+	defer cancel()
+
+	item, err := c.svc.Get(ctx, req.GetId())
 	if err != nil {
 		// This RPC owns how its domain errors map to status codes.
 		switch {
@@ -68,10 +69,10 @@ func (c *Controller) CreateItem(ctx context.Context, req *pb.CreateItemRequest) 
 		return nil, status.Error(codes.InvalidArgument, validationMessage(err))
 	}
 
-	item, err := runWithTimeout(ctx, createItemTimeout,
-		func(ctx context.Context) (domain.Item, error) {
-			return c.svc.Create(ctx, req.GetName())
-		})
+	ctx, cancel := context.WithTimeout(ctx, createItemTimeout)
+	defer cancel()
+
+	item, err := c.svc.Create(ctx, req.GetName())
 	if err != nil {
 		// No domain errors are expected from Create; only transport-level ones.
 		return nil, transportError(err)

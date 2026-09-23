@@ -63,12 +63,23 @@ and the catch-all internal error.
 
 ## Per-endpoint timeouts
 
-Each endpoint/RPC runs under its own hardcoded timeout (the `getItemTimeout` /
-`createItemTimeout` constants in each controller). The call runs via
-`runWithTimeout`, which `select`s on the deadline vs. the result — so a slow
-request yields **504** (HTTP) / **DeadlineExceeded** (gRPC) even if a downstream
-ignores the context. The timeout machinery and mapping are covered by fast
-internal tests (`*_internal_test.go`) rather than slow end-to-end sleeps.
+Each endpoint/RPC has its own hardcoded timeout (`getItemTimeout` /
+`createItemTimeout` constants):
+
+- **HTTP** — a per-route `middleware.Timeout(d)` (chi) sets the deadline on the
+  request context.
+- **gRPC** — each RPC derives one with `context.WithTimeout(ctx, d)`.
+
+The deadline propagates through `ctx` into the service/repository. When a
+ctx-aware downstream honors it and returns `context.DeadlineExceeded`, the
+handler maps that to **504** (HTTP) / **DeadlineExceeded** (gRPC). The mapping is
+covered by fast tests that inject the deadline error directly, rather than
+sleeping out the real timeout.
+
+> Note: the in-memory repo returns instantly and does **not** honor `ctx`, so a
+> real timeout only fires once you back the repo with a ctx-aware datastore (a
+> DB driver cancels the query on deadline). The wiring and 504 mapping are in
+> place and tested; swapping the repo is all that's needed to make it bite.
 
 ## Commands
 

@@ -55,3 +55,15 @@ func TestController_CreateItem_MissingName(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 	assert.Equal(t, "name is required", status.Convert(err).Message())
 }
+
+// When the deadline derived by the RPC is honored by the service, it returns
+// context.DeadlineExceeded, which the RPC surfaces as codes.DeadlineExceeded.
+func TestController_GetItem_Timeout(t *testing.T) {
+	svc := mocks.NewMockService(t)
+	svc.EXPECT().Get(mock.Anything, "slow").Return(domain.Item{}, context.DeadlineExceeded)
+
+	_, err := controller.New(svc).GetItem(context.Background(), &pb.GetItemRequest{Id: "slow"})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
+}
