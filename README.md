@@ -55,13 +55,20 @@ The gRPC service uses the same validator and maps to status codes:
 `InvalidArgument` (validation), `NotFound`, `DeadlineExceeded` (timeout),
 `Internal`.
 
+**Error mapping is per-endpoint, not centralized.** Each handler decides how its
+own domain errors map to a response (the same domain error may warrant a
+different status in a different endpoint). Only non-domain failures are shared:
+`writeTransportError` / `transportError` handle the timeout (the sole exception)
+and the catch-all internal error.
+
 ## Per-endpoint timeouts
 
-Each endpoint/RPC runs under its own timeout (`controller.Timeouts`, defaults in
-`DefaultTimeouts()`). The call runs via `runWithTimeout`, which `select`s on the
-deadline vs. the result — so a slow request yields **504** (HTTP) /
-**DeadlineExceeded** (gRPC) even if a downstream ignores the context. Use
-`controller.NewWithTimeouts(svc, ...)` to inject short timeouts in tests.
+Each endpoint/RPC runs under its own hardcoded timeout (the `getItemTimeout` /
+`createItemTimeout` constants in each controller). The call runs via
+`runWithTimeout`, which `select`s on the deadline vs. the result — so a slow
+request yields **504** (HTTP) / **DeadlineExceeded** (gRPC) even if a downstream
+ignores the context. The timeout machinery and mapping are covered by fast
+internal tests (`*_internal_test.go`) rather than slow end-to-end sleeps.
 
 ## Commands
 

@@ -19,40 +19,21 @@ import (
 	"interview/internal/httpsvc/service"
 )
 
+// Per-endpoint request timeouts.
 const (
-	defaultGetItemTimeout    = 2 * time.Second
-	defaultCreateItemTimeout = 3 * time.Second
+	getItemTimeout    = 2 * time.Second
+	createItemTimeout = 3 * time.Second
 )
-
-// Timeouts holds the per-endpoint request timeouts.
-type Timeouts struct {
-	GetItem    time.Duration
-	CreateItem time.Duration
-}
-
-// DefaultTimeouts returns sensible per-endpoint defaults.
-func DefaultTimeouts() Timeouts {
-	return Timeouts{
-		GetItem:    defaultGetItemTimeout,
-		CreateItem: defaultCreateItemTimeout,
-	}
-}
 
 // Controller adapts HTTP requests to the item service.
 type Controller struct {
 	svc      service.Service
 	validate *validator.Validate
-	timeouts Timeouts
 }
 
-// New builds a controller with the default per-endpoint timeouts.
+// New builds a controller over the given service.
 func New(svc service.Service) *Controller {
-	return NewWithTimeouts(svc, DefaultTimeouts())
-}
-
-// NewWithTimeouts builds a controller with explicit timeouts (used in tests).
-func NewWithTimeouts(svc service.Service, timeouts Timeouts) *Controller {
-	return &Controller{svc: svc, validate: newValidator(), timeouts: timeouts}
+	return &Controller{svc: svc, validate: newValidator()}
 }
 
 // RegisterRoutes mounts the controller's routes on the given router.
@@ -73,12 +54,18 @@ type createItemRequest struct {
 func (c *Controller) getItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	item, err := runWithTimeout(r.Context(), c.timeouts.GetItem,
+	item, err := runWithTimeout(r.Context(), getItemTimeout,
 		func(ctx context.Context) (domain.Item, error) {
 			return c.svc.Get(ctx, id)
 		})
 	if err != nil {
-		c.writeServiceError(w, err)
+		// This endpoint owns how its domain errors map to responses.
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			writeError(w, http.StatusNotFound, codeNotFound, "item not found")
+		default:
+			writeTransportError(w, err)
+		}
 
 		return
 	}
@@ -100,29 +87,18 @@ func (c *Controller) createItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := runWithTimeout(r.Context(), c.timeouts.CreateItem,
+	item, err := runWithTimeout(r.Context(), createItemTimeout,
 		func(ctx context.Context) (domain.Item, error) {
 			return c.svc.Create(ctx, req.Name)
 		})
 	if err != nil {
-		c.writeServiceError(w, err)
+		// No domain errors are expected from Create; only transport-level ones.
+		writeTransportError(w, err)
 
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, toResponse(item))
-}
-
-// writeServiceError maps a service-layer error to the right status + JSON envelope.
-func (c *Controller) writeServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, context.DeadlineExceeded):
-		writeError(w, http.StatusGatewayTimeout, codeTimeout, "request timed out")
-	case errors.Is(err, domain.ErrNotFound):
-		writeError(w, http.StatusNotFound, codeNotFound, "item not found")
-	default:
-		writeError(w, http.StatusInternalServerError, codeInternal, "internal error")
-	}
 }
 
 func toResponse(item domain.Item) itemResponse {

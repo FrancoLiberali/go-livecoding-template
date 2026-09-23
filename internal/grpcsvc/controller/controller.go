@@ -19,24 +19,11 @@ import (
 	"interview/internal/grpcsvc/service"
 )
 
+// Per-RPC timeouts.
 const (
-	defaultGetItemTimeout    = 2 * time.Second
-	defaultCreateItemTimeout = 3 * time.Second
+	getItemTimeout    = 2 * time.Second
+	createItemTimeout = 3 * time.Second
 )
-
-// Timeouts holds the per-RPC timeouts.
-type Timeouts struct {
-	GetItem    time.Duration
-	CreateItem time.Duration
-}
-
-// DefaultTimeouts returns sensible per-RPC defaults.
-func DefaultTimeouts() Timeouts {
-	return Timeouts{
-		GetItem:    defaultGetItemTimeout,
-		CreateItem: defaultCreateItemTimeout,
-	}
-}
 
 // Controller adapts gRPC requests to the item service.
 type Controller struct {
@@ -44,17 +31,11 @@ type Controller struct {
 
 	svc      service.Service
 	validate *validator.Validate
-	timeouts Timeouts
 }
 
-// New builds a controller with the default per-RPC timeouts.
+// New builds a controller over the given service.
 func New(svc service.Service) *Controller {
-	return NewWithTimeouts(svc, DefaultTimeouts())
-}
-
-// NewWithTimeouts builds a controller with explicit timeouts (used in tests).
-func NewWithTimeouts(svc service.Service, timeouts Timeouts) *Controller {
-	return &Controller{svc: svc, validate: newValidator(), timeouts: timeouts}
+	return &Controller{svc: svc, validate: newValidator()}
 }
 
 // createItemInput carries validation tags for the CreateItem request fields.
@@ -62,14 +43,20 @@ type createItemInput struct {
 	Name string `json:"name" validate:"required,max=100"`
 }
 
-// GetItem returns an item by ID, mapping failures to gRPC status codes.
+// GetItem returns an item by ID.
 func (c *Controller) GetItem(ctx context.Context, req *pb.GetItemRequest) (*pb.GetItemResponse, error) {
-	item, err := runWithTimeout(ctx, c.timeouts.GetItem,
+	item, err := runWithTimeout(ctx, getItemTimeout,
 		func(ctx context.Context) (domain.Item, error) {
 			return c.svc.Get(ctx, req.GetId())
 		})
 	if err != nil {
-		return nil, toStatusError(err)
+		// This RPC owns how its domain errors map to status codes.
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			return nil, status.Error(codes.NotFound, "item not found")
+		default:
+			return nil, transportError(err)
+		}
 	}
 
 	return &pb.GetItemResponse{Item: toProto(item)}, nil
@@ -81,27 +68,27 @@ func (c *Controller) CreateItem(ctx context.Context, req *pb.CreateItemRequest) 
 		return nil, status.Error(codes.InvalidArgument, validationMessage(err))
 	}
 
-	item, err := runWithTimeout(ctx, c.timeouts.CreateItem,
+	item, err := runWithTimeout(ctx, createItemTimeout,
 		func(ctx context.Context) (domain.Item, error) {
 			return c.svc.Create(ctx, req.GetName())
 		})
 	if err != nil {
-		return nil, toStatusError(err)
+		// No domain errors are expected from Create; only transport-level ones.
+		return nil, transportError(err)
 	}
 
 	return &pb.CreateItemResponse{Item: toProto(item)}, nil
 }
 
-// toStatusError maps a service-layer error to the right gRPC status.
-func toStatusError(err error) error {
-	switch {
-	case errors.Is(err, context.DeadlineExceeded):
+// transportError maps non-domain (transport/infrastructure) failures. Domain
+// errors are mapped per-RPC by each handler; this covers only the timeout (the
+// sole non-domain exception) and the catch-all internal error.
+func transportError(err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
 		return status.Error(codes.DeadlineExceeded, "request timed out")
-	case errors.Is(err, domain.ErrNotFound):
-		return status.Error(codes.NotFound, "item not found")
-	default:
-		return status.Error(codes.Internal, "internal error")
 	}
+
+	return status.Error(codes.Internal, "internal error")
 }
 
 func toProto(item domain.Item) *pb.Item {

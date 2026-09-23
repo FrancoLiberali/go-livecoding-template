@@ -3,7 +3,6 @@ package controller_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -55,20 +54,4 @@ func TestController_CreateItem_MissingName(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 	assert.Equal(t, "name is required", status.Convert(err).Message())
-}
-
-func TestController_GetItem_Timeout(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	svc.EXPECT().Get(mock.Anything, "slow").RunAndReturn(
-		func(ctx context.Context, _ string) (domain.Item, error) {
-			<-ctx.Done()
-
-			return domain.Item{}, ctx.Err()
-		})
-
-	ctrl := controller.NewWithTimeouts(svc, controller.Timeouts{GetItem: 20 * time.Millisecond})
-	_, err := ctrl.GetItem(context.Background(), &pb.GetItemRequest{Id: "slow"})
-
-	require.Error(t, err)
-	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
 }

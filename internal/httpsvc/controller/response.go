@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -63,6 +64,19 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, errorResponse{Error: errorBody{Code: code, Message: message}})
+}
+
+// writeTransportError renders non-domain (transport/infrastructure) failures.
+// Domain errors are mapped per-endpoint by each handler; this covers only the
+// timeout (the sole non-domain exception) and the catch-all internal error.
+func writeTransportError(w http.ResponseWriter, err error) {
+	if errors.Is(err, context.DeadlineExceeded) {
+		writeError(w, http.StatusGatewayTimeout, codeTimeout, "request timed out")
+
+		return
+	}
+
+	writeError(w, http.StatusInternalServerError, codeInternal, "internal error")
 }
 
 // writeValidationError renders validator failures as a 400 with per-field detail.

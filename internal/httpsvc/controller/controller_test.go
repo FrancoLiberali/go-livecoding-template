@@ -1,12 +1,10 @@
 package controller_test
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -24,16 +22,6 @@ func newRouter(t *testing.T) (*mocks.MockService, http.Handler) {
 	svc := mocks.NewMockService(t)
 	router := chi.NewRouter()
 	controller.New(svc).RegisterRoutes(router)
-
-	return svc, router
-}
-
-func routerWithTimeouts(t *testing.T, timeouts controller.Timeouts) (*mocks.MockService, http.Handler) {
-	t.Helper()
-
-	svc := mocks.NewMockService(t)
-	router := chi.NewRouter()
-	controller.NewWithTimeouts(svc, timeouts).RegisterRoutes(router)
 
 	return svc, router
 }
@@ -101,19 +89,4 @@ func TestController_CreateItem_MalformedJSON(t *testing.T) {
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.JSONEq(t, `{"error":{"code":"invalid_request","message":"malformed JSON body"}}`, rec.Body.String())
-}
-
-func TestController_GetItem_Timeout(t *testing.T) {
-	svc, router := routerWithTimeouts(t, controller.Timeouts{GetItem: 20 * time.Millisecond})
-	svc.EXPECT().Get(mock.Anything, "slow").RunAndReturn(
-		func(ctx context.Context, _ string) (domain.Item, error) {
-			<-ctx.Done()
-
-			return domain.Item{}, ctx.Err()
-		})
-
-	rec := do(router, httptest.NewRequest(http.MethodGet, "/items/slow", nil))
-
-	require.Equal(t, http.StatusGatewayTimeout, rec.Code)
-	assert.JSONEq(t, `{"error":{"code":"timeout","message":"request timed out"}}`, rec.Body.String())
 }
