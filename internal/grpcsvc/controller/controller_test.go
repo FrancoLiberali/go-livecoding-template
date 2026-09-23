@@ -67,3 +67,15 @@ func TestController_GetItem_Timeout(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
 }
+
+// When the client cancels, the service returns context.Canceled, which the RPC
+// surfaces as codes.Canceled.
+func TestController_GetItem_ClientCanceled(t *testing.T) {
+	svc := mocks.NewMockService(t)
+	svc.EXPECT().Get(mock.Anything, "gone").Return(domain.Item{}, context.Canceled)
+
+	_, err := controller.New(svc).GetItem(context.Background(), &pb.GetItemRequest{Id: "gone"})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Canceled, status.Code(err))
+}

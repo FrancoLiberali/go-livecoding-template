@@ -82,14 +82,17 @@ func (c *Controller) CreateItem(ctx context.Context, req *pb.CreateItemRequest) 
 }
 
 // transportError maps non-domain (transport/infrastructure) failures. Domain
-// errors are mapped per-RPC by each handler; this covers only the timeout (the
-// sole non-domain exception) and the catch-all internal error.
+// errors are mapped per-RPC by each handler; this covers the context-driven
+// cases (client cancellation, deadline) and the catch-all internal error.
 func transportError(err error) error {
-	if errors.Is(err, context.DeadlineExceeded) {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return status.Error(codes.Canceled, "request canceled by client")
+	case errors.Is(err, context.DeadlineExceeded):
 		return status.Error(codes.DeadlineExceeded, "request timed out")
+	default:
+		return status.Error(codes.Internal, "internal error")
 	}
-
-	return status.Error(codes.Internal, "internal error")
 }
 
 func toProto(item domain.Item) *pb.Item {

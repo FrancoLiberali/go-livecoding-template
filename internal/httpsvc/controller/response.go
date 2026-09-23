@@ -18,8 +18,13 @@ const (
 	codeValidationError = "validation_error"
 	codeNotFound        = "not_found"
 	codeTimeout         = "timeout"
+	codeCanceled        = "canceled"
 	codeInternal        = "internal"
 )
+
+// statusClientClosedRequest is nginx's non-standard 499, used when the client
+// disconnects before the server responds (net/http has no constant for it).
+const statusClientClosedRequest = 499
 
 // errorResponse is the single JSON envelope used for every error response.
 type errorResponse struct {
@@ -67,16 +72,19 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 }
 
 // writeTransportError renders non-domain (transport/infrastructure) failures.
-// Domain errors are mapped per-endpoint by each handler; this covers only the
-// timeout (the sole non-domain exception) and the catch-all internal error.
+// Domain errors are mapped per-endpoint by each handler; this covers the
+// context-driven cases (client cancellation, deadline) and the catch-all.
 func writeTransportError(w http.ResponseWriter, err error) {
-	if errors.Is(err, context.DeadlineExceeded) {
+	switch {
+	case errors.Is(err, context.Canceled):
+		// Client went away before we responded; the body is largely moot but we
+		// set a status for logs/consistency. 499 = nginx "Client Closed Request".
+		writeError(w, statusClientClosedRequest, codeCanceled, "request canceled by client")
+	case errors.Is(err, context.DeadlineExceeded):
 		writeError(w, http.StatusGatewayTimeout, codeTimeout, "request timed out")
-
-		return
+	default:
+		writeError(w, http.StatusInternalServerError, codeInternal, "internal error")
 	}
-
-	writeError(w, http.StatusInternalServerError, codeInternal, "internal error")
 }
 
 // writeValidationError renders validator failures as a 400 with per-field detail.

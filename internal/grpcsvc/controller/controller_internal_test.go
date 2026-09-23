@@ -18,6 +18,13 @@ func TestTransportError_Timeout(t *testing.T) {
 	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
 }
 
+func TestTransportError_Canceled(t *testing.T) {
+	err := transportError(context.Canceled)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Canceled, status.Code(err))
+}
+
 func TestTransportError_Internal(t *testing.T) {
 	err := transportError(errors.New("boom"))
 

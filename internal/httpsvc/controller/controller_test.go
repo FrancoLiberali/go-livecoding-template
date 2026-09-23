@@ -94,6 +94,18 @@ func TestController_GetItem_Timeout(t *testing.T) {
 	assert.JSONEq(t, `{"error":{"code":"timeout","message":"request timed out"}}`, rec.Body.String())
 }
 
+// When the client cancels before the server responds, the service returns
+// context.Canceled, which the handler surfaces as 499 (Client Closed Request).
+func TestController_GetItem_ClientCanceled(t *testing.T) {
+	svc, router := newRouter(t)
+	svc.EXPECT().Get(mock.Anything, "gone").Return(domain.Item{}, context.Canceled)
+
+	rec := do(router, httptest.NewRequest(http.MethodGet, "/items/gone", nil))
+
+	require.Equal(t, 499, rec.Code)
+	assert.JSONEq(t, `{"error":{"code":"canceled","message":"request canceled by client"}}`, rec.Body.String())
+}
+
 func TestController_CreateItem_MalformedJSON(t *testing.T) {
 	_, router := newRouter(t)
 

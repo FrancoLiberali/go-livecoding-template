@@ -20,6 +20,15 @@ func TestWriteTransportError_Timeout(t *testing.T) {
 	assert.JSONEq(t, `{"error":{"code":"timeout","message":"request timed out"}}`, rec.Body.String())
 }
 
+func TestWriteTransportError_Canceled(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	writeTransportError(rec, context.Canceled)
+
+	require.Equal(t, 499, rec.Code)
+	assert.JSONEq(t, `{"error":{"code":"canceled","message":"request canceled by client"}}`, rec.Body.String())
+}
+
 func TestWriteTransportError_Internal(t *testing.T) {
 	rec := httptest.NewRecorder()
 

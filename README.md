@@ -49,11 +49,12 @@ tags (e.g. `validate:"required,max=100"`). Field names in messages come from the
 | failed validation    | 400    | `validation_error` (with `details`) |
 | item not found       | 404    | `not_found`        |
 | endpoint timed out   | 504    | `timeout`          |
+| client canceled      | 499    | `canceled`         |
 | unexpected failure   | 500    | `internal`         |
 
 The gRPC service uses the same validator and maps to status codes:
 `InvalidArgument` (validation), `NotFound`, `DeadlineExceeded` (timeout),
-`Internal`.
+`Canceled` (client cancellation), `Internal`.
 
 **Error mapping is per-endpoint, not centralized.** Each handler decides how its
 own domain errors map to a response (the same domain error may warrant a
@@ -71,10 +72,11 @@ Each endpoint/RPC has its own hardcoded timeout (`getItemTimeout` /
 - **gRPC** — each RPC derives one with `context.WithTimeout(ctx, d)`.
 
 The deadline propagates through `ctx` into the service/repository. When a
-ctx-aware downstream honors it and returns `context.DeadlineExceeded`, the
-handler maps that to **504** (HTTP) / **DeadlineExceeded** (gRPC). The mapping is
-covered by fast tests that inject the deadline error directly, rather than
-sleeping out the real timeout.
+ctx-aware downstream honors it, the handler maps the `ctx` error:
+`context.DeadlineExceeded` → **504** / **DeadlineExceeded**, and
+`context.Canceled` (the client hung up first) → **499** / **Canceled**. The
+mapping is covered by fast tests that inject the `ctx` error directly, rather
+than sleeping out the real timeout.
 
 > Note: the in-memory repo returns instantly and does **not** honor `ctx`, so a
 > real timeout only fires once you back the repo with a ctx-aware datastore (a
