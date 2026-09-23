@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package grpcsvc.v1;
+
+option go_package = "interview/internal/grpcsvc/pb;pb";
+
+// ItemService is a minimal skeleton service — replace with the interview's API.
+service ItemService {
+  rpc GetItem(GetItemRequest) returns (GetItemResponse);
+  rpc CreateItem(CreateItemRequest) returns (CreateItemResponse);
+}
+
+message Item {
+  string id = 1;
+  string name = 2;
+}
+
+message GetItemRequest {
+  string id = 1;
+}
+
+message GetItemResponse {
+  Item item = 1;
+}
+
+message CreateItemRequest {
+  string name = 1;
+}
+
+message CreateItemResponse {
+  Item item = 1;
+}

@@ -1,0 +1,21 @@
+with-expecter: true
+resolve-type-alias: false
+disable-version-string: true
+issue-845-fix: true
+dir: "{{.InterfaceDir}}/mocks"
+mockname: "Mock{{.InterfaceName}}"
+outpkg: mocks
+filename: "mock_{{.InterfaceName}}.go"
+packages:
+  interview/internal/httpsvc/repository:
+    interfaces:
+      Repository:
+  interview/internal/httpsvc/service:
+    interfaces:
+      Service:
+  interview/internal/grpcsvc/repository:
+    interfaces:
+      Repository:
+  interview/internal/grpcsvc/service:
+    interfaces:
+      Service:

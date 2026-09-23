@@ -101,20 +101,21 @@ linters:
 issues:
   max-same-issues: 0
 formatters:
+  # gci owns import grouping/ordering; gofumpt owns everything else.
+  # gofmt/goimports are redundant subsets and, when co-enabled, make
+  # `run` and `fmt` disagree (a known golangci-lint v2 quirk), so they
+  # are intentionally left off.
   enable:
     - gci
-    - gofmt
     - gofumpt
-    - goimports
   settings:
     gci:
       sections:
         - standard
         - default
         - prefix(interview)
-    goimports:
-      local-prefixes:
-        - interview
+    gofumpt:
+      module-path: interview
   exclusions:
     generated: lax
     paths:
