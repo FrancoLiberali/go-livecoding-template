@@ -1,8 +1,15 @@
 package main
 
-import "testing"
+import (
+	"testing"
 
-// Table-driven test scaffold — copy this shape for each function you write.
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// Table-driven test scaffold with testify — copy this shape per function.
+// assert.* keeps going on failure; require.* stops the test (use for
+// preconditions like require.NoError before asserting the value).
 func TestExample(t *testing.T) {
 	tests := []struct {
 		name string
@@ -13,10 +20,12 @@ func TestExample(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.in // replace with the function under test
-			if got != tt.want {
-				t.Errorf("got %d, want %d", got, tt.want)
-			}
+			got, err := identity(tt.in) // replace with the function under test
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
+
+// placeholder under test — delete when you write the real thing.
+func identity(n int) (int, error) { return n, nil }

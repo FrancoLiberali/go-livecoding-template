@@ -1,0 +1,123 @@
+version: "2"
+linters:
+  default: all
+  disable:
+    - dogsled
+    - exhaustruct
+    - exhaustruct_v5 # deprecated exhaustruct's v2.13 replacement; keep disabled too
+    - gochecknoglobals
+    - gochecknoinits
+    - godot
+    - godox
+    - gomodguard # deprecated (v2.12), replaced by gomodguard_v2 below
+    - ireturn
+    - nlreturn
+    - noinlineerr # inline error handling (if err := ...; err != nil) is idiomatic
+    - nonamedreturns
+    - paralleltest
+    - recvcheck
+    - testpackage
+    - thelper
+    - varnamelen
+    - wrapcheck
+    - wsl # deprecated (v2.2), replaced by wsl_v5
+  settings:
+    cyclop:
+      max-complexity: 20
+      package-average: 0
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: github.com/gogo/protobuf
+              desc: gogo/protobuf is deprecated, use golang/protobuf
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+    exhaustive:
+      check:
+        - switch
+        - map
+    funlen:
+      lines: 80
+      statements: 40
+    gocritic:
+      settings:
+        captLocal:
+          paramsOnly: false
+        underef:
+          skipRecvDeref: false
+    gosec:
+      config:
+        global:
+          audit: true
+          nosec: true
+    govet:
+      disable:
+        - fieldalignment
+      enable-all: true
+      settings:
+        shadow:
+          strict: false
+    lll:
+      line-length: 160
+      tab-width: 1
+    misspell:
+      locale: US
+      ignore-rules:
+        - cancelled
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-no-explanation:
+        - funlen
+        - gocognit
+        - lll
+    unparam:
+      check-exported: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - dupl
+          - err113
+          - errcheck
+          - exhaustive
+          - forcetypeassert
+          - funlen
+          - goconst
+          - mnd
+          - noctx
+        path: _test\.go$|^test/
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-same-issues: 0
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(interview)
+    goimports:
+      local-prefixes:
+        - interview
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

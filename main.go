@@ -1,7 +1,5 @@
 package main
 
-import "fmt"
-
 func main() {
-	fmt.Println("ready")
+	// interview entrypoint — write your solution's driver here.
 }

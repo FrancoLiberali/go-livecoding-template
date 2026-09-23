@@ -1,14 +1,23 @@
-# Binaries
+# Binaries for programs and plugins
 /interview
 *.exe
-*.out
+*.exe~
+*.dll
+*.so
+*.dylib
 
-# Test / coverage
+# Test binary, built with `go test -c`
 *.test
-coverage.out
+
+# Output of the go coverage tool
+*.out
+*-tests*.xml
 coverage.html
 
+# Dependency directories
+vendor/
+
 # Editor / OS
-.DS_Store
-.idea/
 .vscode/
+.idea/
+.DS_Store

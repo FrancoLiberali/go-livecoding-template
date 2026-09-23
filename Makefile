@@ -1,4 +1,4 @@
-.PHONY: run test testv cover lint vet fmt bench
+.PHONY: run test testv cover lint lintfix vet fmt bench
 
 run:
 	go run .
@@ -6,15 +6,18 @@ run:
 test:
 	go test ./...
 
-# verbose + race detector
+# pretty per-test output via gotestsum, with race detector
 testv:
-	go test -race -v ./...
+	gotestsum --format testname -- -race ./...
 
 cover:
 	go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html
 
 lint:
 	golangci-lint run
+
+lintfix:
+	golangci-lint run --fix
 
 vet:
 	go vet ./...
