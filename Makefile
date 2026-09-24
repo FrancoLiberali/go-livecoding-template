@@ -7,6 +7,10 @@ run-http:
 run-grpc:
 	go run ./cmd/grpcserver
 
+# plain executable (no HTTP/gRPC) for algorithm-style problems
+run-cli:
+	go run ./cmd/cli
+
 # --- tests ---
 test:
 	go test ./...
