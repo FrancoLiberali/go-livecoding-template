@@ -17,6 +17,7 @@ in isolation with [mockery](https://vektra.github.io/mockery/)-generated mocks.
 cmd/
   httpserver/        HTTP entrypoint  (wires repo → service → controller, chi)
   grpcserver/        gRPC entrypoint  (wires repo → service → controller, grpc)
+  cli/               plain executable (no HTTP/gRPC) — scratch for algo problems
 internal/
   httpsvc/           HTTP service (independent tree)
     domain/          entity + sentinel errors
@@ -160,8 +161,9 @@ grpcurl -plaintext localhost:9090 list
 grpcurl -plaintext -d '{"name":"widget"}' localhost:9090 grpcsvc.v1.ItemService/CreateItem
 ```
 
-The repo root (`main.go` / `main_test.go`) is a scratch pad for
-algorithm-style problems that don't need the service layout.
+`cmd/cli` is a plain executable (no HTTP/gRPC) — a scratch pad for
+algorithm-style problems that don't need the service layout. Put logic in
+`run(args, out)` so it stays unit-testable; run it with `go run ./cmd/cli`.
 
 ## CI
 
