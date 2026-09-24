@@ -1,9 +1,15 @@
-# go-interview
+# go-livecoding-template
+
+[![ci](https://github.com/FrancoLiberali/go-livecoding-template/actions/workflows/ci.yml/badge.svg)](https://github.com/FrancoLiberali/go-livecoding-template/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=FrancoLiberali_go-livecoding-template&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=FrancoLiberali_go-livecoding-template)
 
 Scaffold for a Go live-coding interview. Two independent, self-contained
 services (HTTP and gRPC), each in a **controller → service → repository**
 layered architecture with interfaces at every seam so each layer is unit-tested
 in isolation with [mockery](https://vektra.github.io/mockery/)-generated mocks.
+
+> The Go module is `interview`; the repository is named
+> `go-livecoding-template`.
 
 ## Layout
 
@@ -156,3 +162,28 @@ grpcurl -plaintext -d '{"name":"widget"}' localhost:9090 grpcsvc.v1.ItemService/
 
 The repo root (`main.go` / `main_test.go`) is a scratch pad for
 algorithm-style problems that don't need the service layout.
+
+## CI
+
+`.github/workflows/ci.yml` runs on push to `main` and on PRs:
+
+1. **Lint** — `golangci-lint` (the full strict config).
+2. **Build** — `go build ./...`.
+3. **Test** — `gotestsum` with `-race` + coverage; publishes a test report and
+   uploads `coverage.out`.
+4. **SonarCloud** — scans with the uploaded coverage (`sonar-project.properties`).
+
+### One-time SonarCloud setup
+
+SonarCloud analysis needs a project + token (this repo is public, so it's free):
+
+1. Sign in at <https://sonarcloud.io> with GitHub and **import** this repo under
+   the `francoliberali` organization (project key `FrancoLiberali_go-livecoding-template`).
+2. Turn **off** SonarCloud's "Automatic Analysis" (this repo uses CI-based analysis).
+3. Generate a token (My Account → Security) and add it to the repo as the
+   `SONAR_TOKEN` secret:
+   ```
+   gh secret set SONAR_TOKEN --repo FrancoLiberali/go-livecoding-template
+   ```
+
+Until the token exists, the first three jobs pass and only the SonarCloud job fails.
